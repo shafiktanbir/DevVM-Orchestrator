@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# VM SSH Orchestrator - Production Grade (Fixed for SSH Banner Timeout)
+# VM SSH Orchestrator - Production Grade
 # Manages VirtualBox VM lifecycle with safe SSH access and auto-shutdown
 # ============================================================================
 set -euo pipefail
@@ -136,15 +136,15 @@ launch_ssh_terminal() {
     # XFCE terminal command with proper quoting and error visibility
     log_info "Launching terminal with SSH session..."
     
-    # CRITICAL FIX: Proper quoting for xfce4-terminal (--hold + -e with nested quotes)
+    # CRITICAL FIX #1: REMOVED --hold FLAG (was preventing terminal closure)
+    # CRITICAL FIX #2: Optimized read command for single silent keypress
     "$TERMINAL_EMULATOR" \
         --title="SSH: $VM_NAME" \
-        --hold \
         -e "bash -c \"printf '\\033]2;SSH: $VM_NAME\\\\007'; \
             echo -e '\\033[1;36mConnecting to $VM_NAME ($SSH_HOST:$SSH_PORT)...\\033[0m'; \
             ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -p $SSH_PORT $SSH_USER@$SSH_HOST${shutdown_cmd}; \
-            echo -e '\\n\\033[1;32m✓ Session ended. Press Enter to close terminal...\\033[0m'; \
-            read\"" &
+            echo -e '\\n\\033[1;32m✓ Session ended. Press any key to close terminal...\\033[0m'; \
+            read -r -n 1 -s\"" &
     
     # Give terminal time to launch
     sleep 2
