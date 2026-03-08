@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hello-pod
+  labels:
+    app: hello
+spec:
+  containers:
+    - name: server
+      image: k8-curriculum-hello:latest
+      imagePullPolicy: IfNotPresent
+      ports:
+        - containerPort: 3000
