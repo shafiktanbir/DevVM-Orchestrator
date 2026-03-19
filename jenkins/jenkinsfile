@@ -1,0 +1,37 @@
+pipeline {
+    
+    agent any
+    tools{
+        maven "MAVEN3.9"
+        jdk "JDK17"
+
+    }
+    stages{
+        stage("fetch source code"){
+            steps{
+                git branch: 'atom', url: 'https://github.com/hkhcoder/vprofile-project.git'
+            }
+            
+        }
+        stage("Unit test"){
+            steps{
+                sh "mvn test"
+            
+        }
+    }
+
+        stage("build"){
+            steps{
+                sh "mvn install -DskipTests"
+            
+        }
+        post{
+            success{
+                echo "archiving artifact"
+                archiveArtifacts artifacts: '**/*.war'
+            }
+        }
+    }
+
+}
+}
