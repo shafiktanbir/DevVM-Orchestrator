@@ -1,0 +1,48 @@
+// PAAC Checkstyle pipeline — same flow as 015 PAAC-Checkstyle.txt but uses Docker
+// instead of Jenkins global tools (MAVEN3.9 / JDK17). Requires Docker on the agent.
+pipeline {
+    agent {
+        docker {
+            image 'maven:3.9.9-eclipse-temurin-17'
+            args '-v $HOME/.m2:/root/.m2'
+        }
+    }
+
+    environment {
+        MAVEN_OPTS = '-Xmx1024m'
+    }
+
+    stages {
+        stage('Fetch code') {
+            steps {
+                git branch: 'atom',
+                    url: 'https://github.com/hkhcoder/vprofile-project.git',
+                    credentialsId: null
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn install -DskipTests'
+            }
+            post {
+                success {
+                    echo 'Now Archiving it...'
+                    archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
+                }
+            }
+        }
+
+        stage('UNIT TEST') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('Checkstyle Analysis') {
+            steps {
+                sh 'mvn checkstyle:checkstyle'
+            }
+        }
+    }
+}
