@@ -1,0 +1,134 @@
+// PAAC Sonar pipeline — same flow as 015 PAAC-SonarCodeAnalysis.txt but uses Docker
+// instead of Jenkins global tools (MAVEN3.9 / JDK17 / sonar6.2).
+//
+// Requirements:
+// - Docker on the Jenkins agent
+// - SonarQube Scanner plugin + configured server credential name: sonarserver (same as original)
+// - Pin sonar-scanner image tag to match your SonarQube server compatibility if needed
+
+// - Slack notification plugin installed and configured
+def COLOR_MAP = [
+    'SUCCESS': 'good',
+    'FAILURE': 'danger',
+    'ABORTED': 'warning',
+    'UNSTABLE': 'warning'
+]
+
+
+
+
+
+pipeline {
+    agent {
+        docker {
+            image 'maven:3.9.9-eclipse-temurin-17'
+            args '-v $HOME/.m2:/root/.m2'
+        }
+    }
+
+    environment {
+        MAVEN_OPTS = '-Xmx1024m'
+    }
+
+    stages {
+        stage('Fetch code') {
+            steps {
+                git branch: 'atom',
+                    url: 'https://github.com/hkhcoder/vprofile-project.git',
+                    credentialsId: null
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn install -DskipTests'
+            }
+            post {
+                success {
+                    echo 'Now Archiving it...'
+                    archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
+                }
+            }
+        }
+
+        stage('UNIT TEST') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('Checkstyle Analysis') {
+            steps {
+                sh 'mvn checkstyle:checkstyle'
+            }
+        }
+
+        // Sonar Scanner is not on the Maven image; use official CLI image with same workspace (reuseNode).
+        stage('Sonar Code Analysis') {
+            steps {
+                // Jenkins SonarQube binding: with a single configured installation,
+                // it's safest to omit the installation name argument.
+                
+
+                withSonarQubeEnv('sonar-scanner') {
+                    // Run Sonar using Maven to avoid nested Docker usage (prevents `docker: not found`).
+                    sh 'mvn clean package sonar:sonar'
+                }
+            }
+        }
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 1, unit: 'HOURS') {
+                waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+
+        // todo adding nexus artifact uploader
+        stage('Nexus Artifact Uploader') {
+            steps {
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus3',
+                    protocol: 'http',
+                    nexusUrl: '3.108.202.112:8081/',
+                    groupId: 'vprofile',
+                    version: "1.0.0-Build-${env.BUILD_ID}",
+                    repository: 'vprofile-repo',
+                    credentialsId: 'nexuslogin',
+                    artifacts: [
+                        [artifactId: 'vprofile',
+                         classifier: '',
+                         file: 'target/vprofile-v2.war',
+                         type: 'war']
+                    ]
+                )
+            }
+        }
+    }
+
+    // Free executor workspace on the agent after run (helps tight EC2 disks). Artifacts already archived in Build.
+    post {
+        always {
+
+        // adding slack notification
+
+
+            slackSend (
+                channel: '#all-jenkins', // Replace with your channel name (e.g., #jenkins or #cicd-notifications)
+                color: COLOR_MAP[currentBuild.currentResult],
+                message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} \n Build Number: ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+            )
+
+
+
+
+            cleanWs(cleanWhenNotBuilt: false,
+                    deleteDirs: true,
+                    disableDeferredWipeout: true)
+        
+
+        }
+
+    }
+}
