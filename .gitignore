@@ -1,0 +1,3 @@
+# Terraform generated files (ignore anywhere in repo)
+**/.terraform/
+**/.terraform.lock.hcl
