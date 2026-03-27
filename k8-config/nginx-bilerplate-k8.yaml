@@ -1,0 +1,73 @@
+apiVersion: apps/v1 # Use the apps API group (stable version) for Deployments
+kind: Deployment # Create a Deployment object (manages Pods + rolling updates)
+metadata: # Basic information about this Deployment resource
+  name: nginx-deployment # Deployment name used in kubectl commands
+  labels: # Labels attached to the Deployment object itself
+    app: nginx # Common app label for grouping/filtering resources
+spec: # Desired state of the Deployment
+  revisionHistoryLimit: 5 # Keep last 5 ReplicaSet revisions for rollback history
+  strategy: # How updates are rolled out when image/spec changes
+    type: RollingUpdate # Update Pods gradually, not all at once
+    rollingUpdate: # Fine-tune rolling update behavior
+      maxSurge: 1 # Allow 1 extra Pod above desired replicas during update
+      maxUnavailable: 0 # Keep all desired Pods available during update
+  selector: # Tells Deployment which Pods it owns/manages
+    matchLabels: # Pods with these labels are selected
+      app: nginx # Must match template labels exactly
+  replicas: 2 # Run 2 Pod replicas for basic availability
+  template: # Pod template used to create Pod replicas
+    metadata: # Metadata for Pods created from this template
+      labels: # Labels on each Pod
+        app: nginx # Service and Deployment selector use this label
+    spec: # Pod-level settings
+      containers: # List of containers inside each Pod
+      - name: nginx # Container name (inside the Pod)
+        image: nginx:1.25.5 # NGINX image + fixed version tag
+        imagePullPolicy: IfNotPresent # Pull only if image is not already on node
+        ports: # Network ports exposed by this container
+        - containerPort: 80 # App listens on port 80 inside container
+          name: http # Named port; useful for Services/Probes
+        resources: # CPU and memory reservation/limits
+          requests: # Minimum guaranteed resources for scheduling
+            cpu: 100m # Request 0.1 CPU core
+            memory: 128Mi # Request 128 MiB memory
+          limits: # Maximum resources container can use
+            cpu: 300m # Limit to 0.3 CPU core
+            memory: 256Mi # Limit to 256 MiB memory
+        readinessProbe: # Controls when Pod is ready to receive traffic
+          httpGet: # Check HTTP endpoint
+            path: / # Probe root path
+            port: http # Use named port "http" (container port 80)
+          initialDelaySeconds: 5 # Wait 5s before first readiness check
+          periodSeconds: 10 # Run readiness check every 10s
+          timeoutSeconds: 3 # Probe fails if no response in 3s
+          failureThreshold: 3 # Mark unready after 3 failed checks
+        livenessProbe: # Detect if app is stuck/dead and restart container
+          httpGet: # Check HTTP endpoint
+            path: / # Probe root path
+            port: http # Use named port "http"
+          initialDelaySeconds: 15 # Wait longer before first liveness check
+          periodSeconds: 20 # Run liveness check every 20s
+          timeoutSeconds: 3 # Probe fails if no response in 3s
+          failureThreshold: 3 # Restart after 3 failed checks
+        securityContext: # Container security hardening options
+          allowPrivilegeEscalation: false # Prevent gaining extra privileges
+          readOnlyRootFilesystem: false # Root FS writable (set true when app supports it)
+          runAsNonRoot: false # Allow root user (set true with non-root image in stricter setups)
+      terminationGracePeriodSeconds: 30 # Give Pod 30s to shut down gracefully
+---
+apiVersion: v1 # Core API group used for Service objects
+kind: Service # Stable network endpoint to reach matching Pods
+metadata: # Metadata for Service
+  name: nginx-service # Service name (DNS: nginx-service.<namespace>.svc)
+  labels: # Labels for this Service object
+    app: nginx # App label for grouping/filtering
+spec: # Desired Service behavior
+  selector: # Route traffic to Pods matching this label
+    app: nginx # Targets Pods created by nginx Deployment
+  ports: # Service port mapping rules
+  - name: http # Logical port name
+    port: 80 # Service port clients connect to
+    targetPort: http # Forward to container named port "http" (80)
+    protocol: TCP # Use TCP protocol
+  type: ClusterIP # Expose internally inside cluster (default and safest)

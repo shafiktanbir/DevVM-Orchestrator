@@ -1,3 +1,4 @@
-# Terraform generated files (ignore anywhere in repo)
-**/.terraform/
-**/.terraform.lock.hcl
+# Terraform local artifacts
+**/.terraform/*
+*.tfstate
+*.tfstate.*
